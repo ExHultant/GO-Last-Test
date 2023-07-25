@@ -16,6 +16,8 @@ type Usuario struct {
 	Rol    string
 }
 
+var templates = template.Must(template.ParseFiles("index.html", "crear.html", "actualizar.html", "eliminar.html"))
+
 func obtenerConexion() (*sql.DB, error) {
 	db, err := sql.Open("mysql", "root:@/bdgolang")
 	if err != nil {
@@ -70,8 +72,8 @@ func eliminarUsuario(id int) error {
 }
 
 func mostrarFormulario(w http.ResponseWriter, r *http.Request) {
-	tpl := template.Must(template.ParseFiles("formulario.html"))
-	tpl.Execute(w, nil)
+	templates.ExecuteTemplate(w, "crear.html", nil)
+	templates.Execute(w, nil)
 }
 
 func crearUsuarioHandler(w http.ResponseWriter, r *http.Request) {
