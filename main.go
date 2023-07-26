@@ -2,145 +2,199 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"html/template"
 	"log"
 	"net/http"
-	"strconv"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
-type Usuario struct {
-	ID     int
-	Nombre string
-	Titulo string
-	Email  string
-	Rol    string
+type Perfil struct {
+	Cedula       string
+	Nombre       string
+	Apellido     string
+	Email        string
+	Especialidad string
 }
 
-var templates = template.Must(template.ParseFiles("index.html", "crear.html", "actualizar.html", "eliminar.html"))
+func dbConnection() (connection *sql.DB) {
+	driver := "mysql"
+	user := "root"
+	password := ""
+	db_name := "teodiofermin"
 
-func obtenerConexion() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "root:@/bdgolang")
+	connection, err := sql.Open(driver, user+":"+password+"@tcp(127.0.0.1)/"+db_name)
 	if err != nil {
-		return nil, err
+		panic(err.Error())
 	}
-	return db, nil
+	return connection
 }
 
-func crearUsuario(nombre, titulo, email, rol string) error {
-	db, err := obtenerConexion()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
+var templates = template.Must(template.ParseGlob("src/*"))
 
-	_, err = db.Exec("INSERT INTO usuarios (nombre, titulo, email, rol) VALUES (?, ?, ?, ?)", nombre, titulo, email, rol)
-	if err != nil {
-		return err
-	}
+func crearUsuario(cedula string, nombre string, apellido string, email string, especialidad string) error {
 
 	return nil
 }
 
-func actualizarUsuario(id int, nombre, titulo, email, rol string) error {
-	db, err := obtenerConexion()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
+// func actualizarUsuario(id int, nombre, titulo, email, rol string) error {
+// 	db := dbConnection()
+// 	cursor := db.Exec("UPDATE usuarios SET nombre = ?, titulo = ?, email = ?, rol = ? WHERE id = ?", nombre, titulo, email, rol, id)
 
-	_, err = db.Exec("UPDATE usuarios SET nombre = ?, titulo = ?, email = ?, rol = ? WHERE id = ?", nombre, titulo, email, rol, id)
-	if err != nil {
-		return err
-	}
+// 	return nil
+// }
 
-	return nil
-}
-
-func eliminarUsuario(id int) error {
-	db, err := obtenerConexion()
-	if err != nil {
-		return err
-	}
-	defer db.Close()
-
-	_, err = db.Exec("DELETE FROM usuarios WHERE id = ?", id)
-	if err != nil {
-		return err
-	}
-
-	return nil
+type Registro struct {
+	ID           int
+	Nombre       string
+	Apellido     string
+	Especialidad sql.NullString
 }
 
 func mostrarFormulario(w http.ResponseWriter, r *http.Request) {
-	templates.ExecuteTemplate(w, "crear.html", nil)
+	db := dbConnection()
+	query, err := db.Query("SELECT * FROM profiles")
+	if err != nil {
+		panic(err.Error())
+	}
+	profile := Perfil{}
+	arrayProfile := []Perfil{}
+	for query.Next() {
+		var cedula, nombre, apellido, email, esp string
+		var especialidad sql.NullString
+		err = query.Scan(&cedula, &nombre, &apellido, &email, &especialidad)
+		if err != nil {
+			panic(err.Error())
+		}
+		if !especialidad.Valid {
+			esp = " "
+		} else {
+			esp = especialidad.String
+		}
+		profile.Nombre = nombre
+		profile.Apellido = apellido
+		profile.Cedula = cedula
+		profile.Email = email
+		profile.Especialidad = esp
+		arrayProfile = append(arrayProfile, profile)
+	}
+	templates.ExecuteTemplate(w, "index", arrayProfile)
 	templates.Execute(w, nil)
+}
+
+func addUser(w http.ResponseWriter, r *http.Request) {
+	templates.ExecuteTemplate(w, "crear", nil)
+	templates.Execute(w, nil)
+}
+
+func actualizarUsuario(w http.ResponseWriter, r *http.Request) {
+	cedula := r.URL.Query().Get("cedula")
+	if cedula == "" {
+		http.Error(w, "Error en el ID proporcionado", http.StatusBadRequest)
+		return
+	}
+	db := dbConnection()
+	query, err := db.Query("SELECT * FROM profiles WHERE Cedula=?", cedula)
+	if err != nil {
+		panic(err.Error())
+	}
+	profile := Perfil{}
+	for query.Next() {
+		var nombre, apellido, email, esp string
+		var especialidad sql.NullString
+		err = query.Scan(&cedula, &nombre, &apellido, &email, &especialidad)
+		if err != nil {
+			panic(err.Error())
+		}
+		if !especialidad.Valid {
+			esp = " "
+		} else {
+			esp = especialidad.String
+		}
+
+		profile.Nombre = nombre
+		profile.Apellido = apellido
+		profile.Cedula = cedula
+		profile.Email = email
+		profile.Especialidad = esp
+	}
+
+	templates.ExecuteTemplate(w, "actualizar", profile)
+}
+func update(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		nombre := r.FormValue("nombre")
+		cedula := r.FormValue("cedula")
+		apellido := r.FormValue("apellido")
+		email := r.FormValue("email")
+		especialidad := r.FormValue("especialidad")
+		fmt.Print(nombre, cedula, apellido, email, especialidad)
+		db := dbConnection()
+		cursor, err := db.Prepare("UPDATE profiles SET Nombre=?,Apellido=?,Email=?,especialidad=? WHERE Cedula=?")
+		if err != nil {
+			panic(err.Error())
+		}
+		cursor.Exec(nombre, apellido, email, especialidad, cedula)
+
+		http.Redirect(w, r, "/", 301)
+	}
+	fmt.Print("a")
 }
 
 func crearUsuarioHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		nombre := r.FormValue("nombre")
-		titulo := r.FormValue("titulo")
+		apellido := r.FormValue("apellido")
 		email := r.FormValue("email")
-		rol := r.FormValue("rol")
-		err := crearUsuario(nombre, titulo, email, rol)
+		cedula := r.FormValue("cedula")
+		especialidad := r.FormValue("especialidad")
+		db := dbConnection()
+		println(db)
+		cursor, err := db.Prepare("INSERT INTO profiles (Cedula, Nombre, Apellido, Email, especialidad) VALUES (?, ?, ?, ?, ?)")
 		if err != nil {
-			log.Println(err)
+			panic(err.Error())
+		}
+		cursor.Exec(cedula, nombre, apellido, email, especialidad)
+		if err != nil {
 			http.Error(w, "Error al crear el usuario", http.StatusInternalServerError)
-			return
+			panic(err.Error())
 		}
+		http.Redirect(w, r, "/", 301)
 	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
-}
 
-func actualizarUsuarioHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		idStr := r.FormValue("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Error en el ID proporcionado", http.StatusBadRequest)
-			return
-		}
-
-		nombre := r.FormValue("nombre")
-		titulo := r.FormValue("titulo")
-		email := r.FormValue("email")
-		rol := r.FormValue("rol")
-		err = actualizarUsuario(id, nombre, titulo, email, rol)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Error al actualizar el usuario", http.StatusInternalServerError)
-			return
-		}
-	}
-	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func eliminarUsuarioHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		idStr := r.FormValue("id")
-		id, err := strconv.Atoi(idStr)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Error en el ID proporcionado", http.StatusBadRequest)
-			return
-		}
+	cedula := r.URL.Query().Get("cedula")
+	if cedula == "" {
+		http.Error(w, "Error en el ID proporcionado", http.StatusBadRequest)
+		return
+	}
+	db := dbConnection()
 
-		err = eliminarUsuario(id)
-		if err != nil {
-			log.Println(err)
-			http.Error(w, "Error al eliminar el usuario", http.StatusInternalServerError)
-			return
-		}
+	cursor, err := db.Prepare("DELETE FROM profiles WHERE Cedula=?")
+	if err != nil {
+		panic(err.Error())
+	}
+	cursor.Exec(cedula)
+	if err != nil {
+		http.Error(w, "Error al eliminar el usuario", http.StatusInternalServerError)
+		panic(err.Error())
 	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func main() {
+
+	fs := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/", mostrarFormulario)
-	http.HandleFunc("/crear", crearUsuarioHandler)
-	http.HandleFunc("/actualizar", actualizarUsuarioHandler)
-	http.HandleFunc("/eliminar", eliminarUsuarioHandler)
+	http.HandleFunc("/crear", addUser)
+	http.HandleFunc("/add", crearUsuarioHandler)
+	http.HandleFunc("/delete", eliminarUsuarioHandler)
+	http.HandleFunc("/actualizar", actualizarUsuario)
+	http.HandleFunc("/update", update)
 
 	log.Println("Servidor escuchando en http://localhost:8080/")
 	log.Fatal(http.ListenAndServe(":8080", nil))

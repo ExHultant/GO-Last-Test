@@ -1,7 +1,6 @@
 {
   "name": "last-test",
   "version": "1.0.0",
-  "description": "",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -11,5 +10,15 @@
   "license": "ISC",
   "dependencies": {
     "tailwindcss": "^3.3.3"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ExHultant/Last-Test.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ExHultant/Last-Test/issues"
+  },
+  "homepage": "https://github.com/ExHultant/Last-Test#readme",
+  "description": ""
 }
